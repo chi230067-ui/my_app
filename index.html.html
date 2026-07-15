@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>スマホ対応インベーダー</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            color: white;
+            text-align: center;
+            overflow: hidden; /* スクロール防止 */
+            touch-action: none;
+        }
+        canvas {
+            background-color: #000;
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+        #controls {
+            display: flex;
+            justify-content: space-around;
+            padding: 10px;
+            background-color: #222;
+            height: 60px;
+        }
+        button {
+            background-color: #444;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 24px;
+            width: 30%;
+            height: 50px;
+        }
+        button:active {
+            background-color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="320" height="400"></canvas>
+
+    <div id="controls">
+        <button id="btnLeft">◀</button>
+        <button id="btnShoot">発射</button>
+        <button id="btnRight">▶</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // ゲーム変数の設定
+        let player = { x: 140, y: 360, width: 40, height: 20, speed: 4, dx: 0 };
+        let bullets = [];
+        let enemies = [];
+        let enemyDirection = 1; // 1:右, -1:左
+        let score = 0;
+        let isGameOver = false;
+
+        // 敵の初期化
+        function initEnemies() {
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 6; col++) {
+                    enemies.push({
+                        x: 30 + col * 40,
+                        y: 30 + row * 30,
+                        width: 25,
+                        height: 20,
+                        status: 1
+                    });
+                }
+            }
+        }
+        initEnemies();
+
+        // 描画処理
+        function draw() {
+            // 画面クリア
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (isGameOver) {
+                ctx.fillStyle = "white";
+                ctx.font = "30px Arial";
+                ctx.fillText("GAME OVER", 70, 200);
+                return;
+            }
+
+            // プレイヤー描画
+            ctx.fillStyle = "#00ff00";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // 弾描画と移動
+            ctx.fillStyle = "yellow";
+            bullets.forEach((b, index) => {
+                b.y -= 5;
+                ctx.fillRect(b.x, b.y, 4, 10);
+                if (b.y < 0) bullets.splice(index, 1);
+            });
+
+            // 敵描画と移動
+            ctx.fillStyle = "red";
+            let hitWall = false;
+            enemies.forEach(e => {
+                if (e.status === 1) {
+                    e.x += 1 * enemyDirection;
+                    if (e.x + e.width > canvas.width || e.x < 0) hitWall = true;
+                    ctx.fillRect(e.x, e.y, e.width, e.height);
+                }
+            });
+
+            // 敵が壁に当たったら一段下がる
+            if (hitWall) {
+                enemyDirection *= -1;
+                enemies.forEach(e => { e.y += 15; });
+            }
+
+            // 当たり判定
+            bullets.forEach((b, bIndex) => {
+                enemies.forEach((e, eIndex) => {
+                    if (e.status === 1 && b.x > e.x && b.x < e.x + e.width && b.y > e.y && b.y < e.y + e.height) {
+                        e.status = 0;
+                        bullets.splice(bIndex, 1);
+                        score += 10;
+                    }
+                });
+            });
+
+            // 敵が下まで到達したらゲームオーバー
+            enemies.forEach(e => {
+                if (e.status === 1 && e.y + e.height > player.y) {
+                    isGameOver = true;
+                }
+            });
+
+            // スコア描画
+            ctx.fillStyle = "white";
+            ctx.font = "16px Arial";
+            ctx.fillText("Score: " + score, 10, 20);
+
+            // プレイヤー移動
+            player.x += player.dx;
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+            requestAnimationFrame(draw);
+        }
+
+        // --- スマホタッチ操作 ---
+        const btnLeft = document.getElementById('btnLeft');
+        const btnRight = document.getElementById('btnRight');
+        const btnShoot = document.getElementById('btnShoot');
+
+        // 左ボタン
+        btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); player.dx = -player.speed; });
+        btnLeft.addEventListener('touchend', (e) => { e.preventDefault(); player.dx = 0; });
+        // 右ボタン
+        btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); player.dx = player.speed; });
+        btnRight.addEventListener('touchend', (e) => { e.preventDefault(); player.dx = 0; });
+        // 発射ボタン
+        btnShoot.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            bullets.push({ x: player.x + player.width / 2 - 2, y: player.y });
+        });
+
+        // --- PCキーボード操作（テスト用） ---
+        document.addEventListener('keydown', (e) => {
+            if (e.key === "ArrowLeft") player.dx = -player.speed;
+            if (e.key === "ArrowRight") player.dx = player.speed;
+            if (e.key === " ") bullets.push({ x: player.x + player.width / 2 - 2, y: player.y });
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.key === "ArrowLeft" || e.key === "ArrowRight") player.dx = 0;
+        });
+
+        // ゲーム開始
+        draw();
+    </script>
+</body>
+</html>
